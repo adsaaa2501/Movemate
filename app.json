@@ -3,7 +3,7 @@
     "name": "MoveMateRebuild",
     "slug": "MoveMateRebuild",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "all",
     "icon": "./assets/images/icon.png",
     "scheme": "movematerebuild",
     "userInterfaceStyle": "automatic",
@@ -11,6 +11,11 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "config": {
+        "googleMaps": {
+          "apiKey": ""
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,6 +36,19 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "MoveMate memakai lokasi untuk menentukan titik penjemputan dan tujuan pindahan."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MoveMate memakai kamera untuk mendokumentasikan kondisi barang sebelum dipindahkan."
         }
       ]
     ],

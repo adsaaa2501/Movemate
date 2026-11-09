@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# server runtime data (dibuat otomatis oleh server/server.cjs)
+server/data/
