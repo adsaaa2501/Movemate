@@ -1,4 +1,4 @@
-# MoveMate 🚐📦
+# MoveMate 
 
 Aplikasi pemesanan jasa pindahan (moving service) berbasis **Expo (React Native)** yang mendemokan materi **Week 2–7 Mata Kuliah Pemrograman Mobile**: UI & aksesibilitas, autentikasi + penyimpanan aman, REST API + DTO, endpoint terproteksi Bearer Token, penanganan kegagalan jaringan, serta Google Maps & kamera.
 
@@ -77,8 +77,8 @@ npx expo start
 | Skenario | Langkah | Hasil di aplikasi |
 | --- | --- | --- |
 | Sukses | Login dengan akun terdaftar | Token disimpan, masuk ke beranda |
-| HTTP 401 | Salah password / token kadaluarsa | 🔐 "Email atau password salah" / prompt login ulang |
-| HTTP 409/400 | Daftar dengan email yang sudah dipakai / password < 8 | ⚠️ pesan dari server |
+| HTTP 401 | Salah password / token kadaluarsa |  "Email atau password salah" / prompt login ulang |
+| HTTP 409/400 | Daftar dengan email yang sudah dipakai / password < 8 |  pesan dari server |
 | Timeout | Pindahkan `request` endpoint ke `GET /api/debug/slow?ms=15000` atau matikan pengembalian server sejenak | ⏱ "Waktu tunggu habis..." |
 | Tanpa internet | Matikan Wi-Fi/host server lalu buka halaman apa pun yang ambil data | 📡 "Tidak dapat menghubungi server..." |
 
