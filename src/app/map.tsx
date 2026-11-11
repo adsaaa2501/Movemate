@@ -15,6 +15,9 @@ import MapView, {
 } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
+import {
+  saveLocationSelection,
+} from '@/constants/location-store';
 
 type Coordinate = { latitude: number; longitude: number };
 
@@ -25,14 +28,45 @@ const MALANG_CENTER: Region = {
   longitudeDelta: 0.035,
 };
 
+/** Ubah teks "lat, lng" dari params menjadi koordinat valid, atau null. */
+function parseCoordParam(raw: unknown): Coordinate | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const [lat, lng] = raw.split(',').map(Number);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return { latitude: lat, longitude: lng };
+  }
+  return null;
+}
+
 export default function MapScreen() {
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{
+    mode?: string;
+    from?: string;
+    pickup?: string;
+    destination?: string;
+  }>();
+
+  // `from=booking` berarti peta dibuka dari langkah "Pilih Lokasi" di
+  // halaman pesanan: hasil pilihan dikembalikan ke form yang sudah terisi,
+  // bukan membuat halaman pesanan baru (data detail barang tetap aman).
+  const fromBooking = params.from === 'booking';
+
+  // Titik awal dari Booking disimpan sebagai state sekali-saja: identitasnya
+  // stabil sehingga effect lokasi di bawah tetap berjalan satu kali.
+  const [initialPoints] = useState(() => ({
+    pickup: parseCoordParam(params.pickup),
+    destination: parseCoordParam(params.destination),
+  }));
 
   const [pickingPoint, setPickingPoint] = useState<'pickup' | 'destination'>(() =>
     params.mode === 'destination' ? 'destination' : 'pickup'
   );
-  const [pickup, setPickup] = useState<Coordinate | null>(null);
-  const [destination, setDestination] = useState<Coordinate | null>(null);
+  const [pickup, setPickup] = useState<Coordinate | null>(
+    () => initialPoints.pickup
+  );
+  const [destination, setDestination] = useState<Coordinate | null>(
+    () => initialPoints.destination
+  );
   const [mapRegion, setMapRegion] = useState<Region>(MALANG_CENTER);
 
   const [locLoading, setLocLoading] = useState(true);
@@ -43,8 +77,13 @@ export default function MapScreen() {
 
   // Lokasi pengguna dipakai sebagai pusat peta (Week 7 — izin lokasi + koordinat).
   // Semua setState ada di dalam callback promise (bukan sinkron di body effect).
+  // Jika peta dibuka dari Booking dan sudah membawa titik tersimpan,
+  // peta tetap memusat ke titik tersebut (bukan ke posisi pengguna).
   useEffect(() => {
     let cancelled = false;
+    const hasInitialPoints = Boolean(
+      initialPoints.pickup || initialPoints.destination
+    );
 
     Location.requestForegroundPermissionsAsync()
       .then(({ status }) => {
@@ -55,6 +94,7 @@ export default function MapScreen() {
           return null;
         }
         setLocPermission('granted');
+        if (hasInitialPoints) return null;
         return Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -78,7 +118,7 @@ export default function MapScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialPoints]);
 
   async function grabCurrentLocation() {
     setError('');
@@ -123,6 +163,21 @@ export default function MapScreen() {
   }
 
   function sendToBooking() {
+    if (fromBooking) {
+      // Dibuka dari Booking: cukup minimal satu titik, hasil dikirim balik
+      // ke form yang sudah terisi (detail barang tidak ikut hilang).
+      if (!pickup && !destination) {
+        setError('Pilih titik penjemputan atau tujuan terlebih dahulu.');
+        return;
+      }
+      saveLocationSelection({
+        pickup: pickup ? formatCoord(pickup) : undefined,
+        destination: destination ? formatCoord(destination) : undefined,
+      });
+      router.back();
+      return;
+    }
+
     if (!pickup || !destination) {
       setError('Pilih titik penjemputan dan tujuan terlebih dahulu.');
       return;
@@ -267,7 +322,9 @@ export default function MapScreen() {
           accessibilityLabel="Gunakan titik ini untuk pesanan"
           accessibilityHint="Membuka halaman pesanan dengan kedua titik sudah terisi"
         >
-          <Text style={styles.buttonText}>Gunakan untuk Pesanan →</Text>
+          <Text style={styles.buttonText}>
+            {fromBooking ? '✓ Gunakan Pilihan Ini' : 'Gunakan untuk Pesanan →'}
+          </Text>
         </Pressable>
       </View>
 
@@ -275,9 +332,13 @@ export default function MapScreen() {
         style={styles.secondary}
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Kembali ke beranda"
+        accessibilityLabel={
+          fromBooking ? 'Kembali ke halaman pesanan' : 'Kembali ke beranda'
+        }
       >
-        <Text>Kembali ke Beranda</Text>
+        <Text>
+          {fromBooking ? 'Kembali ke Halaman Pesanan' : 'Kembali ke Beranda'}
+        </Text>
       </Pressable>
     </SafeAreaView>
   );

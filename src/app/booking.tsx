@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -12,12 +12,18 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import MapView, { Marker, Region, MapPressEvent } from 'react-native-maps';
-import { router, useLocalSearchParams } from 'expo-router';
+import MapView, {
+  Marker,
+  Region,
+  MapPressEvent,
+  PROVIDER_GOOGLE,
+} from 'react-native-maps';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { showMessage } from '@/constants/alert';
 import { useAuth } from '@/constants/auth-context';
 import { ApiError } from '@/constants/api';
 import { getVehicles, createOrder } from '@/constants/order-service';
+import { consumeLocationSelection } from '@/constants/location-store';
 import {
   type VehicleInfo,
   type OrderInfo,
@@ -53,6 +59,11 @@ function parseCoordinate(raw: unknown): Coordinate | null {
     return { latitude: lat, longitude: lng };
   }
   return null;
+}
+
+/** Ubah koordinat menjadi teks "lat, lng" (dipakai saat membuka Peta). */
+function formatCoordinate(coord: Coordinate): string {
+  return `${coord.latitude.toFixed(5)}, ${coord.longitude.toFixed(5)}`;
 }
 
 /** Indikator 3 langkah form (hoisted — bukan komponen di dalam render). */
@@ -133,6 +144,9 @@ export default function BookingScreen() {
   );
   const [pickingPoint, setPickingPoint] = useState<'origin' | 'destination'>('origin');
 
+  // Referensi peta kecil untuk memusat ke titik terpilih (Week 7)
+  const mapRef = useRef<MapView | null>(null);
+
   const [vehicles, setVehicles] = useState<VehicleInfo[]>([]);
   const [vehicleId, setVehicleId] = useState('');
   const [vehicleLoading, setVehicleLoading] = useState(true);
@@ -184,6 +198,25 @@ export default function BookingScreen() {
       setVehicleLoading(false);
     }
   }
+
+  // Saat kembali fokus (dari halaman Peta yang dibuka dengan "Buka Peta
+  // Penuh"), ambil hasil pemilihan titik yang dikirim balik (Week 7).
+  useFocusEffect(
+    useCallback(() => {
+      const selection = consumeLocationSelection();
+      if (!selection) return;
+      if (selection.pickup) {
+        setPickup(selection.pickup);
+        setPickupCoord(parseCoordinate(selection.pickup));
+      }
+      if (selection.destination) {
+        setDestination(selection.destination);
+        setDestinationCoord(parseCoordinate(selection.destination));
+      }
+      setError('');
+      // pesan validasi lama ikut dibersihkan saat kembali dari Peta
+    }, [])
+  );
 
   const berat = parseFloat(weightKg.replace(',', '.'));
   const pickedVehicle = vehicles.find((v) => v.id === vehicleId) ?? null;
@@ -251,6 +284,23 @@ export default function BookingScreen() {
     }
     if (error) setError('');
   }
+
+  // Peta kecil otomatis memusat ke titik terbaru — baik hasil tap langsung
+  // maupun hasil yang dikembalikan halaman Peta penuh (Week 7).
+  useEffect(() => {
+    const target = pickupCoord ?? destinationCoord;
+    if (!target) return;
+    mapRef.current?.animateToRegion(
+      {
+        ...MALANG_CENTER,
+        latitude: target.latitude,
+        longitude: target.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      },
+      400
+    );
+  }, [pickupCoord, destinationCoord]);
 
   // ─── Submit Pemesanan → POST /api/orders (Bearer Token, Week 5) ────────────
   async function handleSubmit() {
@@ -487,8 +537,10 @@ export default function BookingScreen() {
       {/* Peta */}
       <View style={styles.mapContainer}>
         <MapView
+          ref={mapRef}
           style={StyleSheet.absoluteFill}
           initialRegion={MALANG_CENTER}
+          provider={PROVIDER_GOOGLE}
           onPress={handleMapPress}
           accessibilityLabel="Peta Google Maps"
           accessibilityHint="Ketuk untuk menandai titik penjemputan atau tujuan"
@@ -511,14 +563,25 @@ export default function BookingScreen() {
           )}
         </MapView>
 
-        {/* Akses cepat ke halaman Peta untuk lokasi yang presisi */}
+        {/* Akses cepat ke halaman Peta untuk lokasi yang presisi.
+            Titik yang sudah ada dikirim agar marker langsung tampil,
+            dan hasil pilihan dikembalikan ke form ini (from=booking). */}
         <Pressable
           style={styles.mapHintBtn}
           onPress={() => {
             router.push({
               pathname: '/map',
-              params:
-                pickingPoint === 'origin' ? { mode: 'pickup' } : { mode: 'destination' },
+              params: {
+                mode:
+                  pickingPoint === 'origin' ? 'pickup' : 'destination',
+                from: 'booking',
+                ...(pickupCoord
+                  ? { pickup: formatCoordinate(pickupCoord) }
+                  : null),
+                ...(destinationCoord
+                  ? { destination: formatCoordinate(destinationCoord) }
+                  : null),
+              },
             });
           }}
           accessibilityRole="button"

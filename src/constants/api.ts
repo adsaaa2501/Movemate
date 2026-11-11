@@ -33,13 +33,20 @@ export class ApiError extends Error {
 
 /**
  * Menentukan base URL API sesuai platform:
- * - Web (browser)         → localhost:3001
+ * - Web (browser)         → ikuti hostname halaman: "localhost" di PC,
+ *                           IP LAN (mis. 192.168.1.5) saat dibuka dari HP
  * - HP fisik via Expo Go  → IP LAN tempat Expo berjalan (expoConfig.hostUri)
  * - Emulator Android      → 10.0.2.2 (alias host machine) sebagai fallback
  * - Simulator iOS         → localhost (satu mesin dengan server)
  */
 function resolveBaseUrl(): string {
-  if (Platform.OS === 'web') return 'http://localhost:3001';
+  if (Platform.OS === 'web') {
+    // Jangan hardcode localhost: saat web dibuka dari browser HP,
+    // "localhost" menunjuk ke HP itu sendiri sehingga API selalu gagal.
+    const host =
+      typeof window !== 'undefined' ? window.location?.hostname : undefined;
+    return host ? `http://${host}:3001` : 'http://localhost:3001';
+  }
 
   const config =
     (Constants as unknown as {
